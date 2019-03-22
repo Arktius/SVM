@@ -1,0 +1,261 @@
+---
+title: 'ML2: Exam Preparation'
+author: "Denis Baskan"
+date: "14 March 2019"
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+
+# Exercise: Boosting a Tree & SVM (Support-Vector-Machine)
+
+
+## Load Packages
+If packages are not installed, then they will be installed.
+
+```{r warning = FALSE}
+required.packages =  c('gbm','e1071','ISLR','MASS')
+load.packages <- function(packages){
+  
+  for (pckg in packages){
+    if (!(pckg %in% installed.packages()[,"Package"])){
+      install.packages(pckg)
+    }
+    
+    library(pckg, character.only = TRUE)
+  }
+}
+
+load.packages(required.packages)
+
+```
+
+# Boosted Tree Model
+
+Let's see how the boosted tree looks after a single iteration.
+```{r warning = FALSE} 
+set.seed (1)
+
+#one iteration
+mtcars.boost<-gbm(mpg ~ ., data=mtcars, n.trees=1,distribution="gaussian",shrinkage=0.1,bag.fraction=1)
+mtcars.boost
+
+
+mean((mtcars$mpg-mean(mtcars$mpg))^2)  #mse of null model
+mtcars.boost$train.error               #mse of first boost
+
+#Plots
+plot(mtcars$mpg,predict(mtcars.boost,n.trees=1),ylim=c(19,22),ylab="fitted values",xlab="observed values")
+abline(h=mean(mtcars$mpg))
+abline(c(0,1))
+
+plot(mtcars.boost) #effect of variable, split > 5 where the jump happens
+
+```
+
+Better than the Null-Model, but still not good enough for us. The horizontal line is simply the mean of outcome variable mpg. The diagonal represents the perfect fit.
+cyl = 5 is the value where the first split has happened.
+
+## 2 Iterations
+
+```{r warning = FALSE} 
+mtcars.boost<-gbm(mpg ~ ., data=mtcars, n.trees=2,distribution="gaussian",shrinkage=0.1,bag.fraction=1)
+mtcars.boost$train.error
+plot(mtcars$mpg,predict(mtcars.boost,n.trees=1),ylim=c(19,22),ylab="fitted values",xlab="observed values")
+points(mtcars$mpg,predict(mtcars.boost,n.trees=2),pch=2)
+```
+
+We can see two series of predictions in the plot. Circles and triangles each represent a tree.
+MSE is going down further more at least for one of the trees. Can we reduce the MSE with more iterations?
+
+## 3 Iterations
+
+```{r warning = FALSE} 
+mtcars.boost<-gbm(mpg ~ ., data=mtcars, n.trees=3,distribution="gaussian",shrinkage=0.1,bag.fraction=1)
+mtcars.boost$train.error
+plot(mtcars$mpg,predict(mtcars.boost,n.trees=1),ylim=c(18,23),ylab="fitted values",xlab="observed values")
+points(mtcars$mpg,predict(mtcars.boost,n.trees=2),pch=2)
+points(mtcars$mpg,predict(mtcars.boost,n.trees=3),pch=3)
+
+summary(mtcars.boost) #relative influce of each variable
+
+plot(mtcars.boost,i.var="cyl")
+plot(mtcars.boost,i.var="disp")
+```
+
+MSE is again lower with another iteration. Variables cyl and disp are by far the most important variables. For disp ~ 160 the tree has split again.
+
+## 4 iterations
+
+```{r warning = FALSE} 
+
+mtcars.boost<-gbm(mpg ~ ., data=mtcars, n.trees=10,distribution="gaussian",shrinkage=0.1,bag.fraction=1)
+plot(mtcars$mpg,predict(mtcars.boost,n.trees=1),ylim=c(18,23),ylab="fitted values",xlab="observed values")
+points(mtcars$mpg,predict(mtcars.boost,n.trees=4),pch=3)
+summary(mtcars.boost, n.trees=4)
+plot(mtcars.boost,i.var="cyl",n.trees=4)
+plot(mtcars.boost,i.var="disp",n.trees=4)
+plot(mtcars.boost,i.var="hp",n.trees=4)
+```
+
+The 3rd split was at a value of ~125 for the variable hp. Hence the importance of the variables cyl and disp has been declined.
+
+## 5 iterations
+
+```{r warning = FALSE} 
+
+summary(mtcars.boost, n.trees=5)
+plot(mtcars.boost,i.var="cyl",n.trees=5)
+matplot(t(predict(mtcars.boost,n.trees=1:5)),type="l",ylab="fitted values",xlab="iteration")
+summary(mtcars.boost, n.trees=10)
+plot(mtcars.boost,i.var="cyl")
+plot(mtcars.boost,i.var="disp")
+plot(mtcars.boost,i.var="hp")
+plot(mtcars.boost,i.var="wt")
+matplot(t(predict(mtcars.boost,n.trees=1:10)),type="l",ylab="fitted values",xlab="iteration")
+
+```
+
+Cyl has become more important again. One can now see another split for the variables disp, hp and wt.
+
+## 90 iterations
+
+```{r warning = FALSE} 
+
+mtcars.boost<-gbm.more(mtcars.boost,n.new.trees = 90)
+matplot(t(predict(mtcars.boost,n.trees=1:100)),type="l",ylab="fitted values",xlab="iteration")
+summary(mtcars.boost)
+plot(1:100,mtcars.boost$train.error,type="l")
+
+```
+
+After 90 iterations we can obtain a lot from our model. The plot with the fitted values shows the different values in the fitted values. All 10 variables do have now an impact on our model. The relative error
+
+#900 iterations
+
+```{r warning = FALSE} 
+mtcars.boost<-gbm.more(mtcars.boost,n.new.trees = 900)
+matplot(t(predict(mtcars.boost,n.trees=1:1000)),type="l",ylab="fitted values",xlab="iteration")
+summary(mtcars.boost)
+plot(1:1000,mtcars.boost$train.error,type="l")
+
+mtcars.boost$train.error[c(1,100,1000)]
+plot(mtcars$mpg,predict(mtcars.boost,n.trees=1000),ylab="fitted values",xlab="observed values")
+abline(h=mean(mtcars$mpg))
+abline(c(0,1))
+```
+
+The calculated error converts against 0 as expected. The difference in the error between 1 and 100 trees is tremendous, but very low between 100 and 1000 trees. The fitted values are getting closer to the observed ones.
+
+## Try another shrinkage rate
+
+```{r warning = FALSE} 
+error0.1<-mtcars.boost$train.error
+mtcars.boost<-gbm(mpg ~ ., data=mtcars, n.trees=1000,distribution="gaussian",shrinkage=0.01,bag.fraction=1)
+plot(1:1000,error0.1,type="l")
+lines(1:1000,mtcars.boost$train.error,col=3)
+```
+
+Using a lower shrinkage rate results in a slower fitting model. 
+
+
+# SVM 
+
+The following code comes from the lab exercise 9.6.1 Support Vector Classifier in James et al.
+
+## Have a look at our data
+
+```{r warning = FALSE} 
+set.seed(1)
+x=matrix(rnorm(20*2), ncol=2)
+y=c(rep(-1,10), rep(1,10))
+x[y==1,]=x[y==1,] + 1
+plot(x, col=(3-y))
+```
+
+You can instantly see that the data are not linearly separable. 
+
+## Create a SVM with the response as a factor variable
+
+```{r warning = FALSE} 
+dat=data.frame(x=x, y=as.factor(y))
+svmfit=svm(y~., data=dat , kernel="linear", cost=10, scale=FALSE)
+plot(svmfit , dat)
+```
+
+Scale = True scales each feature to have mean zero or std. dev. 1 depending on the application, but we don't need it. We have 2 classes shown in light blue and purple. The decision boundary between the 2 classes is linear as specified. Crosses are our support vectors and the circles are the observations. 
+
+### Show the support vectors + summary 
+```{r warning = FALSE} 
+svmfit$index
+summary(svmfit)
+```
+
+We cann see the number of support vectors per class in the output. 
+
+## Smaller values of the cost parameter gives us...?
+
+```{r warning = FALSE} 
+svmfit=svm(y~., data=dat , kernel="linear",cost=0.1,scale=FALSE)
+plot(svmfit , dat)
+svmfit$index
+```
+
+We gained a larger number of support vectors. Unfortunately, the svm() functions does not return any information about the decision boundary or width of the margin. 
+
+# SVM with 10-fold CV
+
+```{r warning = FALSE}
+set.seed(1)
+tune.out=tune(svm,y~.,data=dat ,kernel="linear",
+ranges=list(cost=c(0.001, 0.01, 0.1, 1,5,10,100) ))
+summary(tune.out)
+bestmod=tune.out$best.model
+summary(bestmod)
+```
+
+The best performance could be obtained with a cost value of 0.1.
+
+## Generating a test set and make predictions
+
+```{r warning = FALSE} 
+xtest=matrix(rnorm(20*2), ncol=2)
+ytest=sample(c(-1,1), 20, rep=TRUE)
+xtest[ytest==1,]= xtest[ytest==1,] + 1
+testdat=data.frame(x=xtest , y=as.factor(ytest))
+ypred=predict(bestmod ,testdat)
+table(predict=ypred , truth=testdat$y )
+```
+
+The predictions are really good! 19 out of 20 were correctly classified.
+
+
+## Separate simulated data
+
+Now where our data are linearly separable, the svm should find a hyperplane. We set our value of cost very large so that no observations are misclassified.
+```{r warning = FALSE} 
+x[y==1,]=x[y==1,]+0.5
+plot(x, col=(y+5)/2, pch=19)
+dat=data.frame(x=x,y=as.factor(y))
+svmfit=svm(y~., data=dat , kernel="linear", cost=1e5)
+summary(svmfit)
+plot(svmfit , dat)
+```
+
+As we can see, there are no errors made. However, the observations, indicated as circles, are very close to the decision boundary. This could lead to poor results on our test set. 
+
+```{r warning = FALSE} 
+svmfit=svm(y~., data=dat , kernel="linear", cost=1)
+summary(svmfit)
+plot(svmfit ,dat)
+```
+
+
+
+
+
+
+
+
